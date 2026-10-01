@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VoltGuard: Smart Cable & Breaker Sizer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#14171b; --panel2:#1b1f24; --line:#262b32;
+    --amber:#f5a623; --amber2:#ffcc66; --ok:#22c55e; --warn:#ef4444;
+    --txt:#e6e9ec; --sub:#8b939d;
+  }
+  html,body{height:100%;}
+  body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;
+    background-image:
+      radial-gradient(circle at 20% 0%, rgba(245,166,35,0.06), transparent 40%),
+      radial-gradient(circle at 80% 100%, rgba(245,166,35,0.04), transparent 40%);
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .panel{background:var(--panel);border:1px solid var(--line);}
+  .panel2{background:var(--panel2);border:1px solid var(--line);}
+  .glow{box-shadow:0 0 0 1px rgba(245,166,35,0.15), 0 8px 30px rgba(0,0,0,0.5);}
+  .input-field{background:#0f1215;border:1px solid var(--line);color:var(--txt);}
+  .input-field:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,166,35,0.15);}
+  .tab-btn{border:1px solid var(--line);background:#0f1215;color:var(--sub);transition:all .15s ease;}
+  .tab-btn.active{background:linear-gradient(180deg,#f5a623,#d9890a);color:#0b0d10;border-color:#f5a623;font-weight:700;}
+  .btn-calc{background:linear-gradient(180deg,#f5a623,#d9890a);color:#0b0d10;font-weight:800;letter-spacing:.02em;}
+  .btn-calc:active{transform:translateY(1px);}
+  .grid-lines{background-image:linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);background-size:22px 22px;}
+  .vd-bar-track{background:#0f1215;border:1px solid var(--line);}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#2a2f36;border-radius:4px;}
+</style>
+</head>
+<body class="grid-lines min-h-screen">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+
+    <!-- Header -->
+    <header class="mb-8 flex items-center gap-3">
+      <div class="w-11 h-11 rounded-lg panel glow flex items-center justify-center text-[#f5a623] text-xl font-black">⚡</div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">VoltGuard</h1>
+        <p class="text-xs sm:text-sm text-[var(--sub)] mono">SMART CABLE &amp; BREAKER SIZER — วสท. reference</p>
+      </div>
+    </header>
+
+    <div class="grid md:grid-cols-5 gap-6">
+      <!-- Input Panel -->
+      <div class="md:col-span-2 panel glow rounded-xl p-5 h-fit">
+        <h2 class="text-sm font-bold text-[#f5a623] mono mb-4 tracking-wider">INPUT PARAMETERS</h2>
+
+        <label class="block text-xs text-[var(--sub)] mb-1">กำลังไฟฟ้าของโหลด (kW)</label>
+        <input id="loadKw" type="number" step="0.1" value="10" class="input-field w-full rounded-lg px-3 py-2 mb-4 mono">
+
+        <label class="block text-xs text-[var(--sub)] mb-1">ระบบแรงดัน</label>
+        <div class="grid grid-cols-2 gap-2 mb-4">
+          <button id="btn1p" class="tab-btn active rounded-lg py-2 text-sm" onclick="setPhase(1)">1 เฟส (230V)</button>
+          <button id="btn3p" class="tab-btn rounded-lg py-2 text-sm" onclick="setPhase(3)">3 เฟส (400V)</button>
+        </div>
+
+        <label class="block text-xs text-[var(--sub)] mb-1">ระยะทางสายไฟ (เมตร)</label>
+        <input id="lengthM" type="number" step="1" value="30" class="input-field w-full rounded-lg px-3 py-2 mb-4 mono">
+
+        <label class="block text-xs text-[var(--sub)] mb-1">Power Factor</label>
+        <input id="pf" type="number" step="0.01" min="0.1" max="1" value="0.85" class="input-field w-full rounded-lg px-3 py-2 mb-5 mono">
+
+        <button onclick="calculate()" class="btn-calc w-full rounded-lg py-3 text-sm">คำนวณสเปก ⚡</button>
+      </div>
+
+      <!-- Results -->
+      <div class="md:col-span-3 space-y-4">
+        <div id="placeholder" class="panel rounded-xl p-8 text-center text-[var(--sub)] text-sm">
+          กรอกข้อมูลด้านซ้ายแล้วกด "คำนวณสเปก" เพื่อดูผลลัพธ์
+        </div>
+
+        <div id="results" class="hidden space-y-4">
+          <!-- Current -->
+          <div class="panel2 rounded-xl p-5 flex items-center justify-between">
+            <div>
+              <p class="text-xs text-[var(--sub)] mono">กระแสใช้งาน (Load Current)</p>
+              <p class="text-3xl font-black mono text-[#ffcc66]" id="outCurrent">--</p>
+            </div>
+            <div class="text-4xl opacity-30">🔌</div>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div class="panel2 rounded-xl p-5">
+              <p class="text-xs text-[var(--sub)] mono mb-1">ขนาดเบรกเกอร์แนะนำ</p>
+              <p class="text-2xl font-black mono text-white" id="outBreaker">--</p>
+              <p class="text-[11px] text-[var(--sub)] mt-1">≥ 1.25 × I ปัดขึ้นตามมาตรฐาน</p>
+            </div>
+            <div class="panel2 rounded-xl p-5">
+              <p class="text-xs text-[var(--sub)] mono mb-1">ขนาดสายไฟทองแดง</p>
+              <p class="text-2xl font-black mono text-white" id="outCable">--</p>
+              <p class="text-[11px] text-[var(--sub)] mt-1">IEC 01 (THW) ในท่อร้อยสาย</p>
+            </div>
+          </div>
+
+          <!-- VD -->
+          <div class="panel2 rounded-xl p-5">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs text-[var(--sub)] mono">แรงดันตกที่ปลายสาย (% Voltage Drop)</p>
+              <p class="text-2xl font-black mono" id="outVdPct">--</p>
+            </div>
+            <div class="vd-bar-track rounded-full h-3 overflow-hidden mb-2">
+              <div id="vdBar" class="h-full rounded-full transition-all" style="width:0%"></div>
+            </div>
+            <p id="vdMsg" class="text-xs mono"></p>
+          </div>
+
+          <div class="panel rounded-xl p-4 text-[11px] text-[var(--sub)] leading-relaxed">
+            หมายเหตุ: ค่าพิกัดกระแสสายไฟและค่าความต้านทานอ้างอิงโดยประมาณตามมาตรฐาน วสท. สำหรับสาย THW เดินในท่อร้อยสาย (Method B1) เพื่อการออกแบบเบื้องต้นเท่านั้น ควรตรวจสอบกับวิศวกรไฟฟ้าก่อนติดตั้งจริง
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+let phase = 1;
+function setPhase(p){
+  phase = p;
+  document.getElementById('btn1p').classList.toggle('active', p===1);
+  document.getElementById('btn3p').classList.toggle('active', p===3);
+}
+
+// [size_sqmm, ampacity_A, resistance_ohm_per_km]
+const CABLE_TABLE = [
+  [1.5, 17, 12.1], [2.5, 23, 7.41], [4, 31, 4.61], [6, 40, 3.08],
+  [10, 55, 1.83], [16, 73, 1.15], [25, 95, 0.727], [35, 119, 0.524],
+  [50, 144, 0.387], [70, 184, 0.268], [95, 223, 0.193], [120, 259, 0.153],
+  [150, 299, 0.124], [185, 341, 0.0991], [240, 403, 0.0754]
+];
+const BREAKER_SIZES = [16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200];
+
+function calculate(){
+  const P = parseFloat(document.getElementById('loadKw').value) || 0;
+  const L = parseFloat(document.getElementById('lengthM').value) || 0;
+  const pf = parseFloat(document.getElementById('pf').value) || 0.85;
+  const V = phase === 1 ? 230 : 400;
+
+  const watts = P * 1000;
+  const I = phase === 1
+    ? watts / (V * pf)
+    : watts / (Math.sqrt(3) * V * pf);
+
+  const cb = BREAKER_SIZES.find(s => s >= I * 1.25) || BREAKER_SIZES[BREAKER_SIZES.length-1];
+  const cable = CABLE_TABLE.find(c => c[1] > cb) || CABLE_TABLE[CABLE_TABLE.length-1];
+
+  const k = phase === 1 ? 2 : Math.sqrt(3);
+  const vdVolts = k * I * (cable[2] * L / 1000) * pf;
+  const vdPct = (vdVolts / V) * 100;
+
+  document.getElementById('placeholder').classList.add('hidden');
+  document.getElementById('results').classList.remove('hidden');
+
+  document.getElementById('outCurrent').textContent = I.toFixed(2) + ' A';
+  document.getElementById('outBreaker').textContent = cb + ' A';
+  document.getElementById('outCable').textContent = cable[0] + ' sq.mm.';
+
+  const vdEl = document.getElementById('outVdPct');
+  const bar = document.getElementById('vdBar');
+  const msg = document.getElementById('vdMsg');
+  const pct = Math.min(vdPct, 10);
+  bar.style.width = (pct/10*100) + '%';
+
+  if (vdPct > 3) {
+    vdEl.textContent = vdPct.toFixed(2) + '%';
+    vdEl.style.color = 'var(--warn)';
+    bar.style.background = 'linear-gradient(90deg,#7f1d1d,#ef4444)';
+    msg.style.color = 'var(--warn)';
+    msg.textContent = '⚠ แรงดันตกเกินมาตรฐาน วสท. (ไม่ควรเกิน 3%) — พิจารณาเพิ่มขนาดสายไฟ';
+  } else {
+    vdEl.textContent = vdPct.toFixed(2) + '%';
+    vdEl.style.color = 'var(--ok)';
+    bar.style.background = 'linear-gradient(90deg,#14532d,#22c55e)';
+    msg.style.color = 'var(--ok)';
+    msg.textContent = '✓ อยู่ในเกณฑ์มาตรฐาน วสท. (ไม่เกิน 3%)';
+  }
+}
+</script>
+</body>
+</html>
